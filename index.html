@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>計算アプリ 完成版</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<style>
+
+body{
+    font-family:sans-serif;
+    max-width:460px;
+    margin:auto;
+    padding:16px;
+    background:#f5f5f5;
+    color:#333;
+}
+
+h2{
+    text-align:center;
+}
+
+.description{
+    background:white;
+    border:1px solid #ccc;
+    border-radius:8px;
+    padding:12px;
+    margin-bottom:20px;
+    line-height:1.8;
+    font-size:14px;
+}
+
+.input-box{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+}
+
+input{
+    padding:12px;
+    font-size:16px;
+    border:1px solid #ccc;
+    border-radius:6px;
+}
+
+.button-group{
+    display:flex;
+    gap:10px;
+    margin-top:12px;
+}
+
+button{
+    flex:1;
+    padding:14px;
+    font-size:16px;
+    border:none;
+    border-radius:6px;
+    cursor:pointer;
+    transition:0.2s;
+}
+
+.calc-btn{
+    background:#222;
+    color:white;
+}
+
+.calc-btn:hover{
+    background:#111;
+}
+
+.reset-btn{
+    background:#888;
+    color:white;
+}
+
+.reset-btn:hover{
+    background:#666;
+}
+
+button:disabled{
+    background:#ccc;
+    cursor:not-allowed;
+}
+
+.loading-overlay{
+    display:none;
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:rgba(255,255,255,0.75);
+    z-index:999;
+    justify-content:center;
+    align-items:center;
+    flex-direction:column;
+}
+
+.spinner{
+    width:70px;
+    height:70px;
+    border:8px solid #ddd;
+    border-top:8px solid #222;
+    border-radius:50%;
+    animation:spin 1s linear infinite;
+}
+
+.loading-text{
+    margin-top:16px;
+    font-size:16px;
+    font-weight:bold;
+    color:#333;
+}
+
+@keyframes spin{
+    0%{
+        transform:rotate(0deg);
+    }
+    100%{
+        transform:rotate(360deg);
+    }
+}
+
+.result{
+    margin-top:20px;
+    padding:12px;
+    background:white;
+    border:1px solid #ccc;
+    border-radius:8px;
+}
+
+.result h3{
+    margin-top:0;
+    text-align:center;
+}
+
+.slider-area{
+    margin-top:20px;
+    background:white;
+    border:1px solid #ccc;
+    border-radius:8px;
+    padding:12px;
+}
+
+.chart-area{
+    margin-top:20px;
+    background:white;
+    border:1px solid #ccc;
+    border-radius:8px;
+    padding:12px;
+}
+
+.history{
+    margin-top:20px;
+    background:white;
+    border:1px solid #ccc;
+    border-radius:8px;
+    padding:10px;
+}
+
+.history h3{
+    text-align:center;
+}
+
+.history-item{
+    border-bottom:1px solid #ddd;
+    padding:10px 0;
+    font-size:14px;
+}
+
+.history-item:last-child{
+    border-bottom:none;
+}
+
+.label{
+    font-weight:bold;
+}
+
+.range-info{
+    margin-top:8px;
+    font-size:13px;
+    color:#666;
+}
+
+canvas{
+    width:100% !important;
+    height:260px !important;
+}
+
+</style>
+</head>
+
+<body>
+
+<h2>計算アプリ</h2>
+
+<div class="description">
+
+政府証券と民間銘柄の交換差額を計算します。<br><br>
+
+本アプリでは、計算の対象として「銘柄」と「政府証券」の交換関係を想定しています。 
+市場価格だけでなく、オプション価格を通じた調整メカニズムに着目することで、証券市場外取引（OTC）においても実装可能な取引構造を、利用者自身が計算を通じて直感的に体感できる設計となっています。 
+
+単なる数値計算ではなく、資産交換の背後にある価格形成や調整過程を可視化し、「政府証券」と「銘柄」がどのような関係性の中で交換可能性を持ち得るのかを理解するためのシミュレーション環境として位置付けています。
+
+</div>
+
+<div class="input-box">
+
+<input id="B" type="number" placeholder="B">
+<input id="S" type="number" placeholder="S">
+<input id="T1" type="number" placeholder="T1">
+<input id="T2" type="number" placeholder="T2">
+
+<hr>
+
+<input id="S1" type="number" placeholder="S1">
+<input id="r" type="number" step="0.0001" placeholder="r">
+<input id="TX3" type="number" step="0.0001" placeholder="TX3">
+
+</div>
+
+<div class="button-group">
+
+<button id="calcBtn" class="calc-btn" onclick="calc()">計算</button>
+
+<button class="reset-btn" onclick="resetForm()">リセット</button>
+
+</div>
+
+<div id="loadingOverlay" class="loading-overlay">
+
+<div class="spinner"></div>
+
+<div class="loading-text">GAS通信中...</div>
+
+</div>
+
+<div class="result">
+
+<h3>計算結果</h3>
+
+<div>O1 : <span id="O1">-</span></div>
+<div>O2 : <span id="O2">-</span></div>
+
+<hr>
+
+<div><strong>S - B + O1 + O2 :</strong> <span id="result">-</span></div>
+
+<hr>
+
+<div>V1 : <span id="V1">-</span></div>
+<div>V2 : <span id="V2">-</span></div>
+
+<hr>
+
+<div>V1 / V2 : <span id="ratio1">-</span></div>
+<div>V2 / V1 : <span id="ratio2">-</span></div>
+
+<hr>
+
+<div>B1 : <span id="B1">-</span></div>
+<div>B2 : <span id="B2">-</span></div>
+
+</div>
+
+<div class="slider-area">
+
+<h3>シミュレーション</h3>
+
+<div>現在の比率 : <span id="sliderValue">1</span></div>
+
+<input
+type="range"
+id="ratioSlider"
+min="0.1"
+max="2"
+step="0.01"
+value="1"
+oninput="updateSimulation()"
+style="width:100%;"
+>
+
+<div class="range-info">
+
+V1/V2 ↔ V2/V1 の範囲をスライダーでシミュレーションします。
+
+</div>
+
+</div>
+
+<div class="chart-area">
+
+<h3>S→Bでのオプション価格変化</h3>
+
+<canvas id="optionChart"></canvas>
+
+<div class="range-info">
+
+S1→B を中心として、典型的コールオプション型の価格変化を可視化します。
+
+</div>
+
+</div>
+
+<div class="history">
+
+<h3>計算履歴</h3>
+
+<div id="historyList">履歴なし</div>
+
+</div>
+
+<script>
+
+const GAS_URL =
+"https://script.google.com/macros/s/AKfycby3p9KLSlESfF-2BmPv7B4n995E2Gu4pNjhpitk-Y3Zfen6jvIAdbe63NTmajSxBbgz/exec";
+
+let historyData = [];
+let fixedB = 0;
+let chart = null;
+
+async function calc(){
+
+    const B =
+    Number(document.getElementById("B").value);
+
+    const S =
+    Number(document.getElementById("S").value);
+
+    const T1 =
+    Number(document.getElementById("T1").value);
+
+    const T2 =
+    Number(document.getElementById("T2").value);
+
+    const S1 =
+    Number(document.getElementById("S1").value);
+
+    const r =
+    Number(document.getElementById("r").value);
+
+    const TX3 =
+    Number(document.getElementById("TX3").value);
+
+    if(
+        isNaN(B) ||
+        isNaN(S) ||
+        isNaN(T1) ||
+        isNaN(T2) ||
+        isNaN(S1) ||
+        isNaN(r) ||
+        isNaN(TX3)
+    ){
+        alert("数値を入力してください");
+        return;
+    }
+
+    fixedB = B;
+
+    document.getElementById("loadingOverlay").style.display = "flex";
+
+    document.getElementById("calcBtn").disabled = true;
+
+    try{
+
+        const res = await fetch(GAS_URL,{
+
+            method:"POST",
+
+            headers:{
+                "Content-Type":"application/json"
+            },
+
+            body:JSON.stringify({
+                B,S,T1,T2
+            })
+
+        });
+
+        const data = await res.json();
+
+        const O1 = Number(data.O1);
+        const O2 = Number(data.O2);
+
+        const result =
+        S - B + O1 + O2;
+
+        document.getElementById("O1").textContent = O1.toFixed(4);
+
+        document.getElementById("O2").textContent = O2.toFixed(4);
+
+        document.getElementById("result").textContent =
+        result.toFixed(4);
+
+        const denominator =
+        B - S1 * Math.exp(-r * TX3);
+
+        const V1 = O1 / denominator;
+        const V2 = O2 / denominator;
+
+        document.getElementById("V1").textContent =
+        V1.toFixed(4);
+
+        document.getElementById("V2").textContent =
+        V2.toFixed(4);
+
+        const ratio1 = V1 / V2;
+        const ratio2 = V2 / V1;
+
+        document.getElementById("ratio1").textContent =
+        ratio1.toFixed(4);
+
+        document.getElementById("ratio2").textContent =
+        ratio2.toFixed(4);
+
+        const slider =
+        document.getElementById("ratioSlider");
+
+        slider.min =
+        Math.min(ratio1, ratio2);
+
+        slider.max =
+        Math.max(ratio1, ratio2);
+
+        slider.value = ratio1;
+
+        updateSimulation();
+
+        addHistory({
+            B,S,T1,T2,
+            O1,O2,
+            result,
+            V1,V2,
+            ratio1,ratio2
+        });
+
+        await updateChart(B,T1,T2,S1);
+
+    }catch(error){
+
+        console.error(error);
+
+        alert("GAS通信エラー");
+
+    }finally{
+
+        document.getElementById("loadingOverlay").style.display = "none";
+
+        document.getElementById("calcBtn").disabled = false;
+
+    }
+}
+
+function updateSimulation(){
+
+    const slider =
+    document.getElementById("ratioSlider");
+
+    const ratio =
+    Number(slider.value);
+
+    document.getElementById("sliderValue").textContent =
+    ratio.toFixed(4);
+
+    const B1 = fixedB * ratio;
+
+    const B2 = fixedB * (1 / ratio);
+
+    document.getElementById("B1").textContent =
+    B1.toFixed(4);
+
+    document.getElementById("B2").textContent =
+    B2.toFixed(4);
+
+}
+
+function resetForm(){
+
+    [
+        "B",
+        "S",
+        "T1",
+        "T2",
+        "S1",
+        "r",
+        "TX3"
+    ].forEach(id=>{
+
+        document.getElementById(id).value = "";
+
+    });
+
+    [
+        "O1",
+        "O2",
+        "result",
+        "V1",
+        "V2",
+        "ratio1",
+        "ratio2",
+        "B1",
+        "B2"
+    ].forEach(id=>{
+
+        document.getElementById(id).textContent = "-";
+
+    });
+
+    if(chart){
+        chart.destroy();
+        chart = null;
+    }
+
+}
+
+function addHistory(item){
+
+    historyData.unshift(item);
+
+    const historyList =
+    document.getElementById("historyList");
+
+    historyList.innerHTML = "";
+
+    historyData.forEach((data,index)=>{
+
+        const div =
+        document.createElement("div");
+
+        div.className = "history-item";
+
+        div.innerHTML = `
+
+        <div><span class="label">No:</span> ${index+1}</div>
+
+        <div><span class="label">B:</span> ${data.B}</div>
+
+        <div><span class="label">S:</span> ${data.S}</div>
+
+        <div><span class="label">O1:</span> ${data.O1}</div>
+
+        <div><span class="label">O2:</span> ${data.O2}</div>
+
+        <div><span class="label">Result:</span> ${data.result}</div>
+
+        `;
+
+        historyList.appendChild(div);
+
+    });
+
+}
+
+async function updateChart(B,T1,T2,S1){
+
+    const S_values = [];
+    const O1_values = [];
+    const O2_values = [];
+
+    const minS = B * 0.5;
+    const maxS = B * 1.5;
+
+    const steps = 60;
+
+    for(let i=0;i<=steps;i++){
+
+        const S =
+        minS + (maxS - minS) * i / steps;
+
+        S_values.push(S.toFixed(2));
+
+        try{
+
+            const res = await fetch(GAS_URL,{
+
+                method:"POST",
+
+                headers:{
+                    "Content-Type":"application/json"
+                },
+
+                body:JSON.stringify({
+                    B,S,T1,T2
+                })
+
+            });
+
+            const data = await res.json();
+
+            const rawO1 = Number(data.O1);
+            const rawO2 = Number(data.O2);
+
+            const diff = S - S1;
+
+            const scale = B * 0.08;
+
+            const sigmoid =
+            1 / (1 + Math.exp(-diff / scale));
+
+            const intrinsic =
+            Math.max(0,diff);
+
+            const visualO1 =
+            rawO1 * 0.7 +
+            intrinsic * sigmoid * 0.3;
+
+            const visualO2 =
+            rawO2 * 0.7 +
+            intrinsic * sigmoid * 0.3;
+
+            O1_values.push(visualO1);
+
+            O2_values.push(visualO2);
+
+        }catch(e){
+
+            O1_values.push(null);
+            O2_values.push(null);
+
+        }
+    }
+
+    const ctx =
+    document.getElementById("optionChart")
+    .getContext("2d");
+
+    if(chart){
+        chart.destroy();
+    }
+
+    chart = new Chart(ctx,{
+
+        type:'line',
+
+        data:{
+
+            labels:S_values,
+
+            datasets:[
+
+                {
+                    label:'O1',
+                    data:O1_values,
+                    borderColor:'#111',
+                    borderWidth:2,
+                    tension:0.35,
+                    pointRadius:0
+                },
+
+                {
+                    label:'O2',
+                    data:O2_values,
+                    borderColor:'#777',
+                    borderWidth:2,
+                    tension:0.35,
+                    pointRadius:0
+                }
+
+            ]
+
+        },
+
+        options:{
+
+            responsive:true,
+
+            maintainAspectRatio:false,
+
+            scales:{
+
+                x:{
+                    title:{
+                        display:true,
+                        text:'S'
+                    }
+                },
+
+                y:{
+                    title:{
+                        display:true,
+                        text:'Option Value'
+                    },
+                    beginAtZero:true
+                }
+
+            }
+
+        }
+
+    });
+
+    // S1基準線
+
+    const xScale = chart.scales.x;
+
+    const targetIndex =
+    S_values.findIndex(v => Number(v) >= S1);
+
+    if(targetIndex >= 0){
+
+        const x =
+        xScale.getPixelForValue(targetIndex);
+
+        const ctx2 = chart.ctx;
+
+        ctx2.save();
+
+        ctx2.strokeStyle = 'red';
+
+        ctx2.lineWidth = 1;
+
+        ctx2.setLineDash([5,5]);
+
+        ctx2.beginPath();
+
+        ctx2.moveTo(x,20);
+
+        ctx2.lineTo(x,250);
+
+        ctx2.stroke();
+
+        ctx2.restore();
+
+    }
+
+}
+
+</script>
+
+</body>
+</html>
